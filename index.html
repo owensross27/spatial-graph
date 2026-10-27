@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="State-scale graph of addresses, parcels, buildings, places and roads built from collected public data with Apache Sedona and Iceberg.">
+<style>:root{color-scheme:light}body{margin:0}img{max-width:100%}</style>
+<title>Spatial Interconnections Graph</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=Schibsted+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column; a survey-plat feel (fine grid ground, ink lines, one teal accent for edges). */
+:root{
+  --bg:#f3f5f2; --panel:#ffffff; --sunk:#e8ece7; --ink:#18232b; --ink2:#4a5a63; --ink3:#7b8a90;
+  --rule:#d3dbd5; --accent:#0f7a72; --accent-bg:#dcefeb; --ochre:#a8661b; --ochre-bg:#f5e8d6;
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --body:"Schibsted Grotesk",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10171b; --panel:#162026; --sunk:#1b262d; --ink:#e6ecea; --ink2:#a3b2b4; --ink3:#77878b;
+  --rule:#2a373e; --accent:#4cc2b6; --accent-bg:#143430; --ochre:#e0a356; --ochre-bg:#33261a; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10171b; --panel:#162026; --sunk:#1b262d; --ink:#e6ecea; --ink2:#a3b2b4; --ink3:#77878b;
+  --rule:#2a373e; --accent:#4cc2b6; --accent-bg:#143430; --ochre:#e0a356; --ochre-bg:#33261a; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--body);-webkit-font-smoothing:antialiased;
+  background-image:linear-gradient(var(--rule) 1px,transparent 1px),linear-gradient(90deg,var(--rule) 1px,transparent 1px);
+  background-size:48px 48px;background-attachment:fixed}
+.wrap{max-width:880px;margin:0 auto;padding-block:48px 80px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.sheet{background:var(--panel);border:1px solid var(--rule);padding:clamp(20px,4vw,44px)}
+.eyebrow{font:500 12px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin:0 0 14px}
+h1{font:800 clamp(32px,6vw,52px)/1.02 var(--display);letter-spacing:-.02em;margin:0 0 14px;text-wrap:balance}
+h2{font:700 22px/1.2 var(--display);margin:0 0 8px;text-wrap:balance}
+p{margin:0;max-width:66ch;color:var(--ink2)}
+.byline{font:13px var(--mono);color:var(--ink3);margin-top:16px}
+section{margin-top:44px;display:grid;gap:14px}
+code,.m{font-family:var(--mono);font-size:.88em}
+
+.hero{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--rule);border:1px solid var(--rule);margin-top:28px}
+.stat{background:var(--panel);padding:16px 16px 14px;min-width:0}
+.stat b{display:block;font:800 30px/1 var(--display);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.stat span{display:block;margin-top:6px;font-size:13px;line-height:1.35;color:var(--ink2)}
+.stat.k b{color:var(--accent)}
+
+.bars{display:grid;gap:12px}
+.bar{display:grid;grid-template-columns:76px 1fr;gap:12px;align-items:center}
+.bar .lab{font:600 14px var(--body)}
+.bar .lab small{display:block;font:400 12px var(--mono);color:var(--ink3)}
+.track{background:var(--sunk);height:30px;position:relative;min-width:0}
+.fill{background:var(--accent);height:100%}
+.track em{position:absolute;left:8px;top:50%;transform:translateY(-50%);font:500 12.5px var(--mono);font-style:normal;color:var(--ink);
+  background:var(--panel);padding:1px 6px}
+.note{font-size:13.5px;color:var(--ink3)}
+
+ol.flow{list-style:none;margin:0;padding:0;display:grid;gap:0;counter-reset:s;border-left:2px solid var(--accent);margin-left:10px}
+ol.flow li{counter-increment:s;position:relative;padding:0 0 18px 26px}
+ol.flow li:last-child{padding-bottom:0}
+ol.flow li::before{content:counter(s);position:absolute;left:-12px;top:1px;width:22px;height:22px;border-radius:50%;
+  background:var(--panel);border:2px solid var(--accent);font:600 11px/18px var(--mono);text-align:center;color:var(--accent)}
+ol.flow b{font-weight:600;color:var(--ink)}
+ol.flow p{font-size:15px}
+
+.src{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.card{border:1px solid var(--rule);padding:14px 16px;min-width:0}
+.card.scrape{border-color:var(--ochre);background:var(--ochre-bg)}
+.card h3{margin:0 0 4px;font:600 15px var(--body)}
+.card .tag{font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ochre)}
+.card p{font-size:14px}
+
+.rels{display:flex;flex-wrap:wrap;gap:8px}
+.rel{font:500 12.5px var(--mono);padding:5px 10px;background:var(--accent-bg);color:var(--accent);border:1px solid transparent}
+.rel.x{background:var(--ochre-bg);color:var(--ochre)}
+
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:520px}
+.tw{overflow-x:auto;border:1px solid var(--rule)}
+th{text-align:left;font:500 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink3);background:var(--sunk);padding:9px 12px}
+td{padding:9px 12px;border-top:1px solid var(--rule);vertical-align:top}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+ul.plain{margin:0;padding-left:20px;color:var(--ink2);max-width:68ch;display:grid;gap:8px}
+a{color:var(--accent)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (max-width:480px){.bar{grid-template-columns:60px 1fr}.stat b{font-size:26px}}
+</style>
+</head>
+<body>
+
+<div class="wrap"><div class="sheet">
+  <p class="eyebrow">Proof of concept &middot; Sep 2026</p>
+  <h1>Spatial Interconnections Graph</h1>
+  <p>Every address, parcel, building, place and road segment in a state gets an ID, and every spatial relationship between them is precomputed as a graded ID-to-ID edge with history. Parcels and road address ranges came from public sources I collected myself; the build runs as distributed spatial SQL (Apache Sedona on Spark) and lands in Apache Iceberg tables.</p>
+  <p class="byline">Ross Owens &middot; Python, Spark SQL, Apache Sedona, Iceberg, DuckDB, H3</p>
+
+  <div class="hero">
+    <div class="stat k"><b>27.6M</b><span>edges for all of Arizona, one job</span></div>
+    <div class="stat"><b>13.2M</b><span>nodes (addresses, parcels, buildings, places, roads)</span></div>
+    <div class="stat"><b>34 min</b><span>raw sources to clusters, wall clock</span></div>
+    <div class="stat"><b>$8.86</b><span>compute for that state run</span></div>
+  </div>
+
+  <section>
+    <h2>Three states, one database</h2>
+    <p>Utah and Idaho were built as concurrent jobs beside Arizona in 25 minutes for about $10. This version used the pruned 20-relation set, so Arizona is smaller here than in the single-state run above.</p>
+    <div class="bars" role="img" aria-label="Open edges by state: Arizona 21.29 million, Utah 9.07 million, Idaho 4.91 million">
+      <div class="bar"><div class="lab">Arizona</div><div class="track"><div class="fill" style="width:100%"></div><em>21,292,914 edges</em></div></div>
+      <div class="bar"><div class="lab">Utah<small>624 s</small></div><div class="track"><div class="fill" style="width:42.6%"></div><em>9,074,290 edges</em></div></div>
+      <div class="bar"><div class="lab">Idaho<small>482 s</small></div><div class="track"><div class="fill" style="width:23.1%"></div><em>4,912,285 edges</em></div></div>
+    </div>
+    <p class="note">35.3M open edges in total. The feature stage then wrote 18.4M node rows by 103 columns and clustered them across 19 strata.</p>
+  </section>
+
+  <section>
+    <h2>Where the data came from</h2>
+    <p>The commercial parcel data available to me covered six counties. To reach statewide coverage I built my own collection instead of buying it.</p>
+    <div class="src">
+      <div class="card scrape"><span class="tag">Collected</span><h3>Open parcel layers</h3><p>A loader that walks the public county and state ArcGIS REST parcel services listed in the OpenAddresses index, pages through each layer and writes Parquet to S3 with a manifest, so a rerun retries only failed sources. Ran unattended as a service on a home server. Arizona alone: 3,197,511 parcels; Utah 1,596,933; Idaho 1,165,442.</p></div>
+      <div class="card scrape"><span class="tag">Collected</span><h3>Census TIGER/Line 2025</h3><p>6,518 files of road edges, address-range features and primary roads, loaded by state into partitioned Parquet in about two hours. These give road class and house-number ranges per street segment.</p></div>
+      <div class="card"><span class="tag" style="color:var(--accent)">Open data</span><h3>Overture Maps</h3><p>Addresses, places, building footprints and transportation, with two monthly releases kept so the graph can record what changed.</p></div>
+      <div class="card"><span class="tag" style="color:var(--accent)">Open data</span><h3>Foursquare and Census</h3><p>Foursquare open places as a second POI source to match against; Census ZCTA, county and tract polygons for point-in-polygon codes.</p></div>
+    </div>
+    <p class="note">Gaps I documented rather than papered over: 99 Kansas counties publish no parcel layer, and 107 sources were zip downloads rather than map services, so they were left out of this pass.</p>
+  </section>
+
+  <section>
+    <h2>The pipeline</h2>
+    <ol class="flow">
+      <li><b>Load nine sources</b><p>Each registered as a view with identical columns locally and on the cluster, so every SQL step runs unchanged on both.</p></li>
+      <li><b>Normalize addresses</b><p>Parse free-text addresses into number, street, unit, city and zip with a vectorized UDF; native SQL everywhere else.</p></li>
+      <li><b>Build nodes</b><p>One row per feature with H3 (res 5, 9, 12), S2 and geohash cells, census codes and source attributes such as year built, units and floor count.</p></li>
+      <li><b>Build edges in parallel</b><p>Containment, overlap, matching, nearest-road and conflict relations, blocked on H3 cells so joins stay local. Each edge carries a grade from A (geometry) to D (nearest within 25 m), plus X for conflicts.</p></li>
+      <li><b>Write with history</b><p>Iceberg tables partitioned by state and H3 res 5. Edges and nodes are slowly changing (valid_from, valid_to), so a monthly refresh adds and closes rows instead of overwriting.</p></li>
+      <li><b>Features and clusters</b><p>A wide feature row per node (counts, floor-area ratio, parcel coverage, degree by relation) and k-means profiles per property type and stratum.</p></li>
+      <li><b>Serve</b><p>Exported to DuckDB and PMTiles behind a map that serves all of Arizona.</p></li>
+    </ol>
+  </section>
+
+  <section>
+    <h2>Relationships it computes</h2>
+    <div class="rels">
+      <span class="rel">address in building</span><span class="rel">address on parcel</span><span class="rel">building on parcel</span>
+      <span class="rel">place in building</span><span class="rel">place on parcel</span><span class="rel">parcel touches parcel</span>
+      <span class="rel">place has address</span><span class="rel">same place, two sources</span><span class="rel">fuzzy street match</span>
+      <span class="rel">nearest road by class</span><span class="rel">address on road segment</span>
+      <span class="rel">added / removed / replaced / changed</span>
+      <span class="rel x">house number outside street range</span><span class="rel x">address far from its place</span>
+    </div>
+    <p class="note">Shaded orange: data-quality conflicts kept as edges so they can be queried and fixed. A single downtown Phoenix parcel (402 W Van Buren St) yields 19 nodes and 42 edges across 14 relation kinds.</p>
+  </section>
+
+  <section>
+    <h2>How I checked it</h2>
+    <ul class="plain">
+      <li><b>Independent audit.</b> Sampled edges are re-derived from the raw geometry in DuckDB, never by rerunning the build SQL: 13,500 checked, 0 failed. A negative control swaps each edge's destination and confirms the audit catches the fake.</li>
+      <li><b>Engine parity.</b> The same county built locally and on the cluster: 20 of 26 relations matched row for row.</li>
+      <li><b>Rehearse before paying.</b> Every relation ran at county scale on a 12-core home server before any cluster run. Maricopa County end to end in one job: 23 min 51 s, 16.6M edges.</li>
+      <li><b>Fail loudly.</b> The first statewide run stopped on one degenerate parcel whose repaired geometry was empty. A guard at every load now drops such rows (15 of 3.2M) and a test asserts it.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Run log</h2>
+    <div class="tw"><table>
+      <thead><tr><th>Area</th><th>Scope</th><th style="text-align:right">Edges</th><th style="text-align:right">Wall</th><th style="text-align:right">Compute</th></tr></thead>
+      <tbody>
+        <tr><td>Maricopa County, AZ</td><td>build, features, clusters</td><td class="n">16,605,404</td><td class="n">23 m 51 s</td><td class="n">$7.04</td></tr>
+        <tr><td>Arizona</td><td>build, features, clusters</td><td class="n">27,611,433</td><td class="n">33 m 56 s</td><td class="n">$8.86</td></tr>
+        <tr><td>AZ + UT + ID</td><td>20 relations, features</td><td class="n">35,280,489</td><td class="n">25 m*</td><td class="n">~$10*</td></tr>
+      </tbody>
+    </table></div>
+    <p class="note">* Utah and Idaho built concurrently next to an existing Arizona build; time and cost are for that wave.</p>
+  </section>
+</div></div>
+</body>
+</html>
